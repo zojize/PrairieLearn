@@ -30,9 +30,9 @@
     "brotli": 1189
   },
   "scripts/calculatorClient.ts": {
-    "raw": 1939826,
-    "gzip": 525603,
-    "brotli": 419205
+    "raw": 1939906,
+    "gzip": 525605,
+    "brotli": 419545
   },
   "scripts/editErrorClient.ts": {
     "raw": 477,
