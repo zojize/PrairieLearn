@@ -180,9 +180,9 @@
     "brotli": 12313
   },
   "stylesheets/calculator.css": {
-    "raw": 4824,
-    "gzip": 1430,
-    "brotli": 1214
+    "raw": 6323,
+    "gzip": 1808,
+    "brotli": 1537
   },
   "stylesheets/instructorAiGenerateDraftEditor.css": {
     "raw": 2401,
