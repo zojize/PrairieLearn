@@ -451,6 +451,15 @@
               "enabled": {
                 "description": "Whether this assessment tool is enabled.",
                 "type": "boolean"
+              },
+              "features": {
+                "description": "Which calculator panels to enable. Available: scientific, basic, abc, func, programmer. Defaults to [\"scientific\", \"abc\", \"func\"].",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["scientific", "basic", "abc", "func", "programmer"]
+                },
+                "minItems": 1
               }
             }
           },

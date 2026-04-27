@@ -6,10 +6,23 @@ import { CommentJsonSchema } from './comment.js';
 export const EnumAssessmentToolSchema = z.enum(['calculator']);
 export type EnumAssessmentTool = z.infer<typeof EnumAssessmentToolSchema>;
 
-function uniqueArray<T extends ZodSchema>(schema: T) {
-  return z.array(schema).refine((items) => new Set(items).size === items.length, {
-    message: 'All items must be unique, no duplicate values allowed',
-  });
+export const EnumCalculatorFeatureSchema = z.enum([
+  'scientific',
+  'basic',
+  'abc',
+  'func',
+  'programmer',
+]);
+export type EnumCalculatorFeature = z.infer<typeof EnumCalculatorFeatureSchema>;
+
+/** TODO: in zod@4 you can do .check(z.unique()) */
+function uniqueArray<T extends ZodSchema>(schema: T, nonempty = false) {
+  return (nonempty ? z.array(schema).nonempty() : z.array(schema)).refine(
+    (items) => new Set(items).size === items.length,
+    {
+      message: 'All items must be unique, no duplicate values allowed',
+    },
+  );
 }
 
 // TODO: This schema is being deprecated
@@ -317,7 +330,11 @@ export type ZoneQuestionBlockJsonInput = z.input<typeof ZoneQuestionBlockJsonSch
 
 const AssessmentToolJsonSchema = z.object({
   enabled: z.boolean().describe('Whether this assessment tool is enabled.'),
-  // leave room for additional keys in the future
+  features: uniqueArray(EnumCalculatorFeatureSchema, true)
+    .describe(
+      'Which calculator panels to enable. Available: scientific, basic, abc, func, programmer. Defaults to ["scientific", "abc", "func"].',
+    )
+    .optional(),
 });
 
 export const ZoneAssessmentJsonSchema = z.object({

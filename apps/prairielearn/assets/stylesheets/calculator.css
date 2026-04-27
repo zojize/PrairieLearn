@@ -295,6 +295,44 @@ math-field.pl-calculator-history-text:focus {
 
 /* #endregion */
 
+/* #region Base display */
+
+.base-display {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 8px;
+  font-family: var(--bs-font-monospace);
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+}
+
+.base-display-secondary {
+  display: flex;
+  gap: 12px;
+}
+
+.base-value {
+  cursor: copy;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.base-value:hover {
+  background: var(--bs-tertiary-bg);
+}
+
+.base-value.active {
+  font-weight: bold;
+  color: var(--bs-body-color);
+}
+
+/* #endregion */
+
 /* #region Keyboard layout */
 
 .calculator-main {
@@ -306,20 +344,37 @@ math-field.pl-calculator-history-text:focus {
   font-size: 0.85rem;
 }
 
-/* Hide abc and func keyboards by default, show only main */
+/* Hide all keyboards by default — showPanel() reveals the active one */
+#main-keyboard,
+#basic-keyboard,
 #abc-keyboard,
-#func-keyboard {
+#func-keyboard,
+#programmer-keyboard {
   display: none;
 }
 
-#main-keyboard {
-  display: flex;
+#basic-keyboard .btn {
+  min-width: 50px;
+  flex: 1;
+  margin: 3px;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+#basic-keyboard .col-numbers {
+  width: 280px;
+}
+
+#basic-keyboard .col-extras {
+  width: 130px;
 }
 
 /* Shared keyboard dimensions */
 #main-keyboard,
+#basic-keyboard,
 #abc-keyboard,
-#func-keyboard {
+#func-keyboard,
+#programmer-keyboard {
   height: 200px;
   gap: 5px;
   padding: 5px;
@@ -467,4 +522,64 @@ math-field.pl-calculator-history-text:focus {
   }
 }
 
+/* Breakpoint: hide bitwise column in programmer keyboard, show chevron to toggle */
+@container calculator (max-width: 740px) {
+  #programmer-keyboard .col-bitwise {
+    display: none !important;
+  }
+
+  #programmer-keyboard .col-nav-left {
+    display: flex;
+  }
+
+  #programmer-keyboard.show-bitwise .col-bitwise {
+    display: flex !important;
+  }
+  #programmer-keyboard.show-bitwise .col-numbers {
+    display: none !important;
+  }
+  #programmer-keyboard.show-bitwise .col-nav-left {
+    display: none;
+  }
+  #programmer-keyboard.show-bitwise .col-nav-right {
+    display: flex;
+  }
+}
+
 /* #endregion */
+
+#programmer-keyboard .btn {
+  min-width: 50px;
+  flex: 1;
+  margin: 3px;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+#programmer-keyboard .col-bitwise {
+  width: 280px;
+}
+
+#programmer-keyboard .col-numbers {
+  width: 200px;
+}
+
+#programmer-keyboard .col-extras {
+  width: 130px;
+}
+
+#programmer-keyboard .btn-hex {
+  font-weight: bold;
+  font-family: var(--bs-font-monospace);
+}
+
+#programmer-keyboard .btn-hex:not(:disabled) {
+  background-color: var(--bs-primary-bg-subtle);
+  color: var(--bs-primary);
+}
+
+#programmer-keyboard .btn-hex:disabled,
+#programmer-keyboard .btn-digit:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}

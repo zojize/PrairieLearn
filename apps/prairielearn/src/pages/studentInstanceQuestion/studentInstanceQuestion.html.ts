@@ -22,6 +22,7 @@ import { type CopyTarget } from '../../lib/copy-content.js';
 import type { AssessmentTool, User } from '../../lib/db-types.js';
 import { getRoleNamesForUser } from '../../lib/groups.shared.js';
 import type { UntypedResLocals } from '../../lib/res-locals.types.js';
+import type { EnumCalculatorFeature } from '../../schemas/infoAssessment.js';
 
 export function StudentInstanceQuestion({
   resLocals,
@@ -43,7 +44,8 @@ export function StudentInstanceQuestion({
     resLocals.assessment.type === 'Exam' ? 'student_exam' : 'student_homework';
   // TODO: support more tools
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  const hasCalculator = enabledTools.some((t) => t.tool === 'calculator');
+  const calculatorTool = enabledTools.find((t) => t.tool === 'calculator');
+  const hasCalculator = !!calculatorTool;
 
   return PageLayout({
     resLocals,
@@ -101,6 +103,7 @@ export function StudentInstanceQuestion({
     postContent: hasCalculator
       ? CalculatorDrawer({
           storageKey: `calculator-${resLocals.assessment.uuid}-${resLocals.assessment_instance.id}`,
+          features: calculatorTool.settings.features as EnumCalculatorFeature[] | undefined,
         })
       : '',
     content: html`

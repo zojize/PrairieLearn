@@ -60,10 +60,9 @@ describe('assessment model', () => {
       assert.isAbove(overrides.length, 0);
 
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      const calcOverride = overrides.find((o) => o.tool === 'calculator');
+      const calcOverride = overrides.find((o) => o.tool === 'calculator' && o.zone_number === 1);
       assert.isNotNull(calcOverride);
       assert.equal(calcOverride?.enabled, false);
-      assert.equal(calcOverride?.zone_number, 1);
     });
 
     it('returns empty array for assessment without zone tool overrides', async () => {

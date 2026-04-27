@@ -83,8 +83,44 @@ const INVERSE_TRIG_FUNCTIONS = new Set([
   'Acsch',
 ]);
 
+function toBaseString(n: number, base: number): string {
+  if (!Number.isInteger(n)) return '';
+  const str = Math.abs(n).toString(base).toUpperCase();
+  if (base === 2) {
+    // Nibble grouping
+    const padded = str.padStart(Math.ceil(str.length / 4) * 4, '0');
+    return (n < 0 ? '-' : '') + padded.replaceAll(/(.{4})/g, '$1 ').trim();
+  }
+  return (n < 0 ? '-' : '') + str;
+}
+
+const BASE_LABELS: Record<number, string> = {
+  2: 'BIN',
+  8: 'OCT',
+  10: 'DEC',
+  16: 'HEX',
+};
+
+function updateBaseDisplay(result: number, activeBase: number) {
+  const display = document.getElementById('base-display');
+  if (!display) return;
+
+  display.querySelectorAll<HTMLElement>('.base-value').forEach((el) => {
+    const base = Number(el.dataset.base);
+    el.textContent = `${BASE_LABELS[base]}: ${toBaseString(result, base)}`;
+    el.classList.toggle('active', base === activeBase);
+  });
+}
+
 export function initCalculator(storageKey: string, { drawer, fab, fabClose }: DrawerElements) {
-  showPanel('main', drawer);
+  const featuresAttr = drawer.dataset.features;
+  const defaultFeatures = ['scientific', 'abc', 'func'];
+  let features: string[];
+  try {
+    features = featuresAttr ? JSON.parse(featuresAttr) : defaultFeatures;
+  } catch {
+    features = defaultFeatures;
+  }
   initColumnNavigation(drawer);
   initDrawerUI(drawer, fab, fabClose, storageKey);
   const ce = new ComputeEngine();
@@ -161,7 +197,7 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
   ]);
   const autoAnsKeys = new Set(['+', '-', '*', '/', '^', '!']);
 
-  drawer.querySelectorAll('button[name="calculate"]').forEach((button) => {
+  drawer.querySelectorAll<HTMLButtonElement>('[data-key="calculate"]').forEach((button) => {
     prepareButton(button);
     button.addEventListener('click', () => {
       calculate(true);
@@ -277,6 +313,31 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
     }
   }
 
+  const BASE_RADIXES = new Set([2, 8, 10, 16]);
+
+  /** Replace ["Subscript", value, base] with the decimal integer for bases 2/8/10/16. */
+  function resolveBaseSubscripts(json: MathJsonExpression): MathJsonExpression {
+    if (!Array.isArray(json)) return json;
+    if (json[0] === 'Subscript' && json.length === 3) {
+      const base = typeof json[2] === 'number' ? json[2] : undefined;
+      if (base && BASE_RADIXES.has(base)) {
+        // The value may be a number (e.g. 1010_{2}) or a string symbol (e.g. FF_{16})
+        const raw =
+          typeof json[1] === 'number'
+            ? String(json[1])
+            : typeof json[1] === 'string'
+              ? json[1]
+              : undefined;
+        if (raw) {
+          const parsed = Number.parseInt(raw, base);
+          if (!Number.isNaN(parsed)) return parsed;
+        }
+      }
+    }
+    const [head, ...rest] = json;
+    return [head, ...rest.map((item: MathJsonExpression) => resolveBaseSubscripts(item))] as const;
+  }
+
   function evaluateExpression(
     input: string,
     angleMode: AngleMode = 'rad',
@@ -289,6 +350,11 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
 
     if (angleMode === 'deg') {
       parsed = ce.expr(radianToDegree(parsed.json));
+    }
+
+    // Convert base subscripts like FF_{16} or 1010_{2} to decimal
+    if (features.includes('programmer')) {
+      parsed = ce.expr(resolveBaseSubscripts(parsed.json));
     }
 
     const json = parsed.json;
@@ -322,6 +388,8 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
         void navigator.clipboard.writeText('');
       };
       calculatorInputGroup.classList.remove('error');
+      lastIntegerResult = 0;
+      refreshBaseDisplay();
       return;
     }
 
@@ -354,6 +422,19 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
 
     calculatorInputGroup.classList.remove('error');
     calculatorOutput.value = `=${displayed}`;
+
+    // Update base conversion display for programmer mode
+    if (features.includes('programmer')) {
+      try {
+        const numResult = Number(evaluated.N().valueOf());
+        if (Number.isInteger(numResult)) {
+          lastIntegerResult = numResult;
+          refreshBaseDisplay();
+        }
+      } catch {
+        // ignore non-numeric results
+      }
+    }
 
     copyButton.onclick = function () {
       window.bootstrap.Tooltip.getInstance(copyButton)?.hide();
@@ -391,6 +472,8 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
 
       calculatorInputElement.value = '';
       calculatorOutput.value = '';
+      lastIntegerResult = 0;
+      refreshBaseDisplay();
     }
     data.temp_input = calculatorInputElement.value;
     setCalculatorData(storageKey, data);
@@ -418,20 +501,8 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
 
   registerCustomFunctions(ce);
 
-  // Buttons for number and letter inputs
-  drawer.querySelectorAll<HTMLButtonElement>('.btn-key').forEach((button) => {
-    prepareButton(button);
-    button.addEventListener('click', () => {
-      shouldAutoInsertAns = false;
-      const key = button.dataset.key;
-      const value = key && button.classList.contains('uppercase') ? key.toUpperCase() : key;
-      calculatorInputElement.insert(value ?? button.textContent);
-      calculatorInputElement.focus();
-    });
-  });
-
   // Upper/lowercase switch
-  drawer.querySelectorAll<HTMLElement>('[name="shift"]').forEach((button) =>
+  drawer.querySelectorAll<HTMLButtonElement>('[data-key="shift"]').forEach((button) =>
     button.addEventListener('click', () => {
       button.classList.toggle('btn-light');
       button.classList.toggle('btn-secondary');
@@ -442,7 +513,7 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
   );
 
   // Backspace button
-  drawer.querySelectorAll<HTMLElement>('[name="backspace"]').forEach((button) => {
+  drawer.querySelectorAll<HTMLButtonElement>('[data-key="backspace"]').forEach((button) => {
     prepareButton(button);
     button.addEventListener('click', () => {
       calculatorInputElement.executeCommand(['deleteBackward']);
@@ -451,14 +522,14 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
   });
 
   // Left/right
-  drawer.querySelectorAll<HTMLElement>('[name="left"]').forEach((button) => {
+  drawer.querySelectorAll<HTMLButtonElement>('[data-key="left"]').forEach((button) => {
     prepareButton(button);
     button.addEventListener('click', () => {
       calculatorInputElement.executeCommand(['moveToPreviousChar']);
       calculatorInputElement.focus();
     });
   });
-  drawer.querySelectorAll<HTMLElement>('[name="right"]').forEach((button) => {
+  drawer.querySelectorAll<HTMLButtonElement>('[data-key="right"]').forEach((button) => {
     prepareButton(button);
     button.addEventListener('click', () => {
       calculatorInputElement.executeCommand(['moveToNextChar']);
@@ -467,7 +538,7 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
   });
 
   // Clear all
-  drawer.querySelectorAll<HTMLElement>('[name="clear"]').forEach((button) => {
+  drawer.querySelectorAll<HTMLButtonElement>('[data-key="clear"]').forEach((button) => {
     prepareButton(button);
     button.addEventListener('click', () => {
       calculatorInputElement.executeCommand('deleteAll');
@@ -524,15 +595,114 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
     lbra: '[',
     rbra: ']',
     eq: '=',
+    'bitwise-and': '\\operatorname{and}',
+    'bitwise-or': '\\operatorname{or}',
+    'bitwise-xor': '\\veebar',
+    'bitwise-not': '\\lnot',
+    'bitwise-nand': '\\barwedge',
+    'bitwise-nor': '\\operatorname{Nor}(#@,#?)',
+    'left-shift': '\\operatorname{Lsh}(#@,#?)',
+    'right-shift': '\\operatorname{Rsh}(#@,#?)',
   };
 
   setupButtonEvents(buttonActions);
+
+  // Buttons for number and letter inputs
+  const specialKeys = new Set(['backspace', 'left', 'right', 'calculate', 'shift', 'clear']);
+
+  document.querySelectorAll<HTMLButtonElement>('.btn-key').forEach((button) => {
+    const key = button.dataset.key;
+    if (!key || key in buttonActions || specialKeys.has(key)) return;
+    prepareButton(button);
+    button.addEventListener('click', () => {
+      shouldAutoInsertAns = false;
+      const value = button.classList.contains('uppercase') ? key.toUpperCase() : key;
+      calculatorInputElement.insert(value);
+      calculatorInputElement.focus();
+    });
+  });
+
+  // Base conversion display
+  const validBases = [2, 8, 10, 16];
+  let activeBase = Number(localStorage.getItem(`${storageKey}-activeBase`) ?? '10');
+  if (!validBases.includes(activeBase)) activeBase = 10;
+  let lastIntegerResult = 0;
+
+  if (features.includes('programmer')) {
+    updateDigitStates(activeBase);
+  }
+
+  function refreshBaseDisplay() {
+    updateBaseDisplay(lastIntegerResult, activeBase);
+  }
 
   // Panel switching (main / abc / func keyboards)
   drawer.querySelectorAll<HTMLInputElement>('[data-panel]').forEach((radio) => {
     radio.addEventListener('click', () => {
       const panel = radio.dataset.panel;
-      if (panel) showPanel(panel, drawer);
+      if (panel) {
+        showPanel(panel, drawer);
+        const baseDisplay = drawer.querySelector<HTMLElement>('#base-display');
+        if (baseDisplay) {
+          baseDisplay.style.display = panel === 'programmer' ? 'flex' : 'none';
+          if (panel === 'programmer') {
+            refreshBaseDisplay();
+          }
+        }
+      }
+    });
+  });
+
+  // Show the initially checked panel
+  const panelClassMap: Record<string, string> = {
+    scientific: 'main',
+    basic: 'basic',
+    abc: 'abc',
+    func: 'func',
+    programmer: 'programmer',
+  };
+  const checkedRadio = drawer.querySelector<HTMLInputElement>('[data-panel]:checked');
+  const initialPanel = checkedRadio?.dataset.panel ?? panelClassMap[features[0]];
+  if (initialPanel) {
+    showPanel(initialPanel, drawer);
+    const baseDisplay = drawer.querySelector<HTMLElement>('#base-display');
+    if (baseDisplay) {
+      baseDisplay.style.display = initialPanel === 'programmer' ? 'flex' : 'none';
+    }
+  }
+
+  function updateDigitStates(activeBase: number) {
+    const programmerKeyboard = drawer.querySelector<HTMLElement>('#programmer-keyboard');
+    if (!programmerKeyboard) return;
+
+    // Hex digits A-F: only enabled in base 16
+    programmerKeyboard.querySelectorAll<HTMLButtonElement>('.btn-hex').forEach((btn) => {
+      btn.disabled = activeBase !== 16;
+    });
+
+    // Numeric digits: disable those >= activeBase
+    programmerKeyboard.querySelectorAll<HTMLButtonElement>('.btn-digit').forEach((btn) => {
+      const digit = Number(btn.dataset.key);
+      if (!Number.isNaN(digit)) {
+        btn.disabled = digit >= activeBase;
+      }
+    });
+  }
+
+  drawer.querySelectorAll<HTMLElement>('.base-value').forEach((el) => {
+    el.addEventListener('click', () => {
+      // Copy the raw value (without label) to clipboard
+      const text = el.textContent.replace(/^(HEX|OCT|DEC|BIN):\s*/, '');
+      void navigator.clipboard.writeText(text);
+
+      // Switch active base
+      const newBase = Number(el.dataset.base);
+      if (newBase) {
+        activeBase = newBase;
+        localStorage.setItem(`${storageKey}-activeBase`, String(activeBase));
+        updateDigitStates(activeBase);
+        refreshBaseDisplay();
+      }
     });
   });
 
@@ -642,14 +812,14 @@ export function initCalculator(storageKey: string, { drawer, fab, fabClose }: Dr
   }
 
   function setupButtonEvents(actions: Record<string, string>) {
-    for (const [buttonName, action] of Object.entries(actions)) {
-      drawer.querySelectorAll<HTMLElement>(`[name="${buttonName}"]`).forEach((button) => {
+    for (const [buttonKey, action] of Object.entries(actions)) {
+      drawer.querySelectorAll<HTMLButtonElement>(`[data-key="${buttonKey}"]`).forEach((button) => {
         prepareButton(button);
         button.addEventListener('click', () => {
           if (
             shouldAutoInsertAns &&
             calculatorInputElement.value.length === 0 &&
-            autoAnsButtons.has(buttonName)
+            autoAnsButtons.has(buttonKey)
           ) {
             if (action.includes('#0')) {
               calculatorInputElement.insert(action.replaceAll('#0', '\\operatorname{ans}'));
@@ -770,13 +940,14 @@ function showPanel(panelClass: string, container: HTMLElement) {
   const panels = container.querySelectorAll<HTMLElement>('.keyboard');
   panels.forEach((panel) => (panel.style.display = 'none'));
 
-  const panelToShow = container.querySelectorAll<HTMLElement>(`.${panelClass}`);
+  const panelToShow = container.querySelectorAll<HTMLElement>(`.keyboard.${panelClass}`);
   panelToShow.forEach((panel) => (panel.style.display = 'flex'));
 }
 
 function initColumnNavigation(container: HTMLElement) {
   setupKeyboardNav('main-keyboard', 'show-functions');
   setupKeyboardNav('func-keyboard', 'show-trig');
+  setupKeyboardNav('programmer-keyboard', 'show-bitwise');
 
   function setupKeyboardNav(keyboardId: string, toggleClass: string) {
     const keyboard = container.querySelector<HTMLElement>(`#${keyboardId}`);
@@ -929,6 +1100,67 @@ export function registerCustomFunctions(ce: InstanceType<typeof ComputeEngine>) 
     signature: '(xs: list) -> number',
     evaluate([list]) {
       return computeStdev(list, true);
+    },
+  });
+
+  // Bitwise operations (JavaScript bitwise operators work on 32-bit integers)
+  // Override built-in logical operators with bitwise implementations
+  // CE's \operatorname{and}, \operatorname{or}, \veebar, \lnot, \barwedge
+  // parse to And, Or, Xor, Not, Nand respectively
+  ce.declare('And', {
+    signature: '(a: number, b: number) -> number',
+    evaluate([a, b]) {
+      return ce.number(a.re & b.re);
+    },
+  });
+
+  ce.declare('Or', {
+    signature: '(a: number, b: number) -> number',
+    evaluate([a, b]) {
+      return ce.number(a.re | b.re);
+    },
+  });
+
+  ce.declare('Xor', {
+    signature: '(a: number, b: number) -> number',
+    evaluate([a, b]) {
+      return ce.number(a.re ^ b.re);
+    },
+  });
+
+  ce.declare('Not', {
+    signature: '(a: number) -> number',
+    evaluate([a]) {
+      return ce.number(~a.re);
+    },
+  });
+
+  ce.declare('Nand', {
+    signature: '(a: number, b: number) -> number',
+    evaluate([a, b]) {
+      return ce.number(~(a.re & b.re));
+    },
+  });
+
+  // Nor, Lsh, Rsh don't have built-in infix triggers — used as functions
+  ce.declare('Nor', {
+    signature: '(a: number, b: number) -> number',
+    evaluate([a, b]) {
+      return ce.number(~(a.re | b.re));
+    },
+  });
+
+  ce.declare('Lsh', {
+    signature: '(a: number, b: number) -> number',
+    evaluate([a, b]) {
+      return ce.number(a.re << b.re);
+    },
+  });
+
+  ce.declare('Rsh', {
+    signature: '(a: number, b: number) -> number',
+    evaluate([a, b]) {
+      return ce.number(a.re >> b.re);
     },
   });
 }

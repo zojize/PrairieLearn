@@ -600,6 +600,10 @@ async function syncAssessmentTools(
 
     assessmentIds.push(assessmentId);
 
+    // Skip assessments with errors — the sync_assessments sproc won't have
+    // created/updated zones for them, so zone lookups would fail.
+    if (infofile.hasErrors(assessment)) continue;
+
     if (assessment.data?.tools) {
       for (const [toolName, { enabled, ...settings }] of Object.entries(assessment.data.tools)) {
         const tool = EnumAssessmentToolSchema.parse(toolName);
